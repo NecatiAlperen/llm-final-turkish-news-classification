@@ -26,6 +26,9 @@ outputs/eval_results.csv
 outputs/failed_examples.csv
 outputs/**/checkpoints/
 
+# Interpress dataset önbelleği
+data/
+
 # Hugging Face / PyTorch cache
 .cache/
 huggingface/

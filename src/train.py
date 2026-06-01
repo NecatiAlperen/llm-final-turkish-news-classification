@@ -19,10 +19,10 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     DataCollatorWithPadding,
-    Trainer,
-    TrainingArguments,
     set_seed,
 )
+
+from hf_compat import build_trainer, build_training_arguments  # noqa: E402
 
 # src/ modül yolu
 SRC_DIR = Path(__file__).resolve().parent
@@ -84,6 +84,14 @@ def peak_gpu_memory_mb() -> float | None:
     if torch.cuda.is_available():
         return torch.cuda.max_memory_allocated() / (1024**2)
     return None
+
+
+def free_gpu_memory(*objects) -> None:
+    """Model/trainer arası bellek temizliği (T4 OOM önleme)."""
+    for obj in objects:
+        del obj
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def model_size_mb(model: torch.nn.Module) -> float:
@@ -266,7 +274,7 @@ def run_finetuning(
     output_dir = MODELS_DIR / short / f"seed_{seed}" / "checkpoints"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    training_args = TrainingArguments(
+    training_args = build_training_arguments(
         output_dir=str(output_dir),
         num_train_epochs=NUM_EPOCHS,
         per_device_train_batch_size=BATCH_SIZE,
@@ -282,9 +290,10 @@ def run_finetuning(
         report_to="none",
         seed=seed,
         dataloader_num_workers=0,
+        gradient_checkpointing=False,
     )
 
-    trainer = Trainer(
+    trainer = build_trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized["train"],
@@ -337,7 +346,7 @@ def run_finetuning(
         "fine_tuned",
     )
 
-    return {
+    result = {
         "model": model_id,
         "seed": seed,
         "phase": "fine_tuned",
@@ -351,6 +360,9 @@ def run_finetuning(
         "train_loss": train_result.training_loss,
         "failed_examples": failed,
     }
+
+    free_gpu_memory(trainer, model, tokenizer)
+    return result
 
 
 def collect_failed_examples_with_text(
@@ -433,6 +445,11 @@ def main() -> None:
         )
         row_clean = {k: v for k, v in baseline_row.items() if not k.startswith("_")}
         all_rows.append(row_clean)
+        free_gpu_memory(
+            baseline_row.get("_model"),
+            baseline_row.get("_tokenizer"),
+            tokenizer,
+        )
 
         # --- Fine-tuning: her seed ---
         seed_rows: list[dict] = []

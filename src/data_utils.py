@@ -4,15 +4,24 @@ Veri yükleme, kolon tespiti, etiket kodlama ve stratified bölme.
 
 from __future__ import annotations
 
+import csv
 import logging
+import zipfile
+from pathlib import Path
 from typing import Any
+from urllib.request import urlretrieve
 
 import numpy as np
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
+from datasets import ClassLabel, Dataset, DatasetDict, Features, Value, concatenate_datasets, load_dataset
 from sklearn.model_selection import train_test_split
 
 from config import (
+    CATEGORY_NAMES,
     DATASET_NAME,
+    INTERPRESS_CACHE_DIR,
+    INTERPRESS_TEST_TSV,
+    INTERPRESS_TRAIN_TSV,
+    INTERPRESS_ZIP_URL,
     LABEL_COLUMN_CANDIDATES,
     TEST_RATIO,
     TEXT_COLUMN_CANDIDATES,
@@ -45,20 +54,91 @@ def detect_columns(dataset: Dataset) -> tuple[str, str]:
     return text_col, label_col
 
 
-def load_and_merge_dataset(dataset_name: str = DATASET_NAME) -> Dataset:
-    """Hugging Face dataset'ini yükler; train+test birleştirir."""
-    logger.info("Dataset yükleniyor: %s", dataset_name)
-    raw = load_dataset(dataset_name)
+def _dataset_features() -> Features:
+    return Features(
+        {
+            "content": Value("string"),
+            "category": ClassLabel(names=CATEGORY_NAMES),
+        }
+    )
 
-    parts = []
-    for split_name in raw.keys():
-        parts.append(raw[split_name])
-        logger.info("  split '%s': %d örnek", split_name, len(raw[split_name]))
 
-    merged = concatenate_datasets(parts) if len(parts) > 1 else parts[0]
+def _read_interpress_tsv(tsv_path: Path) -> Dataset:
+    """Interpress TSV: news (metin) + label (0-9)."""
+    contents: list[str] = []
+    categories: list[int] = []
+    with open(tsv_path, encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
+        for row in reader:
+            contents.append(row["news"])
+            categories.append(int(row["label"]))
+    return Dataset.from_dict(
+        {"content": contents, "category": categories},
+        features=_dataset_features(),
+    )
 
-    logger.info("Toplam örnek: %d", len(merged))
+
+def load_and_merge_from_interpress_zip() -> Dataset:
+    """
+    Hugging Face script olmadan resmi ZIP/TSV kaynağından yükler.
+    datasets>=4 ortamında (Kaggle) gerekli yedek yol.
+    """
+    cache_dir = INTERPRESS_CACHE_DIR
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = cache_dir / "interpress_news_category_tr_270k_lite.zip"
+    extract_dir = cache_dir / "extracted"
+
+    if not zip_path.exists():
+        logger.info("Interpress ZIP indiriliyor: %s", INTERPRESS_ZIP_URL)
+        urlretrieve(INTERPRESS_ZIP_URL, zip_path)
+
+    train_tsv = extract_dir / INTERPRESS_TRAIN_TSV
+    test_tsv = extract_dir / INTERPRESS_TEST_TSV
+    if not train_tsv.exists() or not test_tsv.exists():
+        logger.info("ZIP açılıyor: %s", zip_path)
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(extract_dir)
+
+    if not train_tsv.exists():
+        # Bazı arşivlerde alt klasör olabilir
+        found = list(extract_dir.rglob(INTERPRESS_TRAIN_TSV))
+        if not found:
+            raise FileNotFoundError(
+                f"Train TSV bulunamadı: {INTERPRESS_TRAIN_TSV} — {extract_dir}"
+            )
+        train_tsv = found[0]
+        test_tsv = train_tsv.parent / INTERPRESS_TEST_TSV
+
+    train_ds = _read_interpress_tsv(train_tsv)
+    test_ds = _read_interpress_tsv(test_tsv)
+    logger.info("  TSV train: %d örnek", len(train_ds))
+    logger.info("  TSV test: %d örnek", len(test_ds))
+
+    merged = concatenate_datasets([train_ds, test_ds])
+    logger.info("Toplam örnek: %d (Interpress ZIP/TSV)", len(merged))
     return merged
+
+
+def load_and_merge_dataset(dataset_name: str = DATASET_NAME) -> Dataset:
+    """HF dataset veya (script yoksa) Interpress ZIP/TSV; train+test birleştirir."""
+    logger.info("Dataset yükleniyor: %s", dataset_name)
+    try:
+        raw = load_dataset(dataset_name)
+        parts = []
+        for split_name in raw.keys():
+            parts.append(raw[split_name])
+            logger.info("  split '%s': %d örnek", split_name, len(raw[split_name]))
+        merged = concatenate_datasets(parts) if len(parts) > 1 else parts[0]
+        logger.info("Toplam örnek: %d (Hugging Face)", len(merged))
+        return merged
+    except RuntimeError as exc:
+        if "Dataset scripts are no longer supported" not in str(exc):
+            raise
+        logger.warning(
+            "HF script desteklenmiyor (datasets>=4). Interpress ZIP kullanılıyor."
+        )
+        return load_and_merge_from_interpress_zip()
 
 
 def encode_labels(

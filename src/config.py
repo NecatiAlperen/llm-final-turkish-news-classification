@@ -14,6 +14,28 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 DATASET_NAME = "yavuzkomecoglu/interpress_news_category_tr_lite"
 
+# Script desteklenmezse doğrudan indirme (resmi kaynak — dataset .py ile aynı)
+INTERPRESS_ZIP_URL = (
+    "https://www.interpress.com/downloads/interpress_news_category_tr_270k_lite.zip"
+)
+INTERPRESS_CACHE_DIR = PROJECT_ROOT / "data" / "interpress_cache"
+INTERPRESS_TRAIN_TSV = "interpress_news_category_tr_270k_lite_train.tsv"
+INTERPRESS_TEST_TSV = "interpress_news_category_tr_270k_lite_test.tsv"
+
+# 10 sınıf (ClassLabel sırası — label 0..9)
+CATEGORY_NAMES = [
+    "kültürsanat",
+    "ekonomi",
+    "siyaset",
+    "eğitim",
+    "dünya",
+    "spor",
+    "teknoloji",
+    "magazin",
+    "sağlık",
+    "gündem",
+]
+
 # Olası metin / etiket kolon adları (otomatik tespit için)
 TEXT_COLUMN_CANDIDATES = ("content", "text", "news", "article", "body", "sentence")
 LABEL_COLUMN_CANDIDATES = ("category", "label", "labels", "class", "target")

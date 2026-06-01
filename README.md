@@ -48,13 +48,19 @@ pip install -r requirements.txt
 !pip install -q -r requirements.txt
 ```
 
-4. Eğitimi başlatın:
+4. **Ön kontrol** (dataset + bölme + GPU — önerilir):
+
+```bash
+!python src/verify_setup.py
+```
+
+5. Eğitimi başlatın:
 
 ```bash
 !python src/train.py
 ```
 
-5. (İsteğe bağlı) Kayıtlı modelleri yeniden değerlendirin:
+6. (İsteğe bağlı) Kayıtlı modelleri yeniden değerlendirin:
 
 ```bash
 !python src/evaluate.py
