@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import sys
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,20 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_csv_field_size_limit() -> None:
+    """Uzun haber satırları için csv alan boyutu sınırını yükseltir."""
+    limit = sys.maxsize
+    while limit > 0:
+        try:
+            csv.field_size_limit(limit)
+            return
+        except OverflowError:
+            limit //= 10
+
+
+_configure_csv_field_size_limit()
 
 
 def detect_columns(dataset: Dataset) -> tuple[str, str]:
@@ -65,6 +80,7 @@ def _dataset_features() -> Features:
 
 def _read_interpress_tsv(tsv_path: Path) -> Dataset:
     """Interpress TSV: news (metin) + label (0-9)."""
+    _configure_csv_field_size_limit()
     contents: list[str] = []
     categories: list[int] = []
     with open(tsv_path, encoding="utf-8") as f:
