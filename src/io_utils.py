@@ -1,7 +1,3 @@
-"""
-Çıktı dizinleri, CSV kayıt ve loss eğrileri.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -35,14 +31,12 @@ RESULT_COLUMNS = [
 
 
 def ensure_output_dirs() -> None:
-    """outputs/ alt dizinlerini oluşturur."""
     for path in (OUTPUTS_DIR, OUTPUTS_DIR / "models", PLOTS_DIR):
         path.mkdir(parents=True, exist_ok=True)
     logger.info("Çıktı dizinleri hazır: %s", OUTPUTS_DIR)
 
 
 def append_results_row(row: dict[str, Any], csv_path: Path = RESULTS_CSV) -> None:
-    """results.csv'ye tek satır ekler (dosya yoksa başlık yazar)."""
     df_new = pd.DataFrame([row], columns=RESULT_COLUMNS)
     if csv_path.exists():
         df_existing = pd.read_csv(csv_path)
@@ -53,7 +47,6 @@ def append_results_row(row: dict[str, Any], csv_path: Path = RESULTS_CSV) -> Non
 
 
 def write_results_table(rows: list[dict[str, Any]], csv_path: Path = RESULTS_CSV) -> None:
-    """Tüm sonuç tablosunu yazar."""
     df = pd.DataFrame(rows)
     for col in RESULT_COLUMNS:
         if col not in df.columns:
@@ -67,7 +60,6 @@ def save_failed_examples(
     csv_path: Path = FAILED_EXAMPLES_CSV,
     min_count: int = 5,
 ) -> None:
-    """Hatalı tahminleri CSV'ye yazar."""
     if len(examples) < min_count:
         logger.warning(
             "Yalnızca %d hatalı örnek bulundu (minimum %d).",
@@ -85,7 +77,6 @@ def plot_loss_curves(
     seed: int,
     plots_dir: Path = PLOTS_DIR,
 ) -> Path | None:
-    """Trainer log_history'den loss eğrisi kaydeder."""
     train_loss = [
         (e["step"], e["loss"])
         for e in log_history
@@ -125,5 +116,4 @@ def plot_loss_curves(
 
 
 def model_short_name(model_id: str) -> str:
-    """Dosya adları için kısa model adı."""
     return model_id.split("/")[-1].replace("-", "_")

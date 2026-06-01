@@ -1,7 +1,3 @@
-"""
-Transformers 4.x / 5.x API uyumluluğu (Kaggle transformers 5.0 için).
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -11,7 +7,6 @@ from transformers import Trainer, TrainingArguments
 
 
 def build_training_arguments(**kwargs: Any) -> TrainingArguments:
-    """evaluation_strategy / eval_strategy otomatik seçimi."""
     sig = inspect.signature(TrainingArguments.__init__)
     if "eval_strategy" in sig.parameters and "evaluation_strategy" in kwargs:
         kwargs["eval_strategy"] = kwargs.pop("evaluation_strategy")
@@ -21,7 +16,6 @@ def build_training_arguments(**kwargs: Any) -> TrainingArguments:
 
 
 def build_trainer(**kwargs: Any) -> Trainer:
-    """tokenizer / processing_class otomatik seçimi."""
     sig = inspect.signature(Trainer.__init__)
     tokenizer = kwargs.pop("tokenizer", None)
     if tokenizer is not None:

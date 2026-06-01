@@ -1,10 +1,3 @@
-"""
-Türkçe haber kategorisi sınıflandırma — fine-tuning ve baseline eğitim scripti.
-
-Kullanım (proje kökünden):
-    python src/train.py
-"""
-
 from __future__ import annotations
 
 import logging
@@ -22,14 +15,13 @@ from transformers import (
     set_seed,
 )
 
-from hf_compat import build_trainer, build_training_arguments  # noqa: E402
+from hf_compat import build_trainer, build_training_arguments
 
-# src/ modül yolu
 SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from config import (  # noqa: E402
+from config import (
     BATCH_SIZE,
     EVALUATION_STRATEGY,
     FP16,
@@ -45,15 +37,15 @@ from config import (  # noqa: E402
     WARMUP_RATIO,
     WEIGHT_DECAY,
 )
-from data_utils import prepare_datasets  # noqa: E402
-from io_utils import (  # noqa: E402
+from data_utils import prepare_datasets
+from io_utils import (
     ensure_output_dirs,
     model_short_name,
     plot_loss_curves,
     save_failed_examples,
     write_results_table,
 )
-from metrics_utils import aggregate_seed_results, compute_metrics, metrics_from_predictions  # noqa: E402
+from metrics_utils import aggregate_seed_results, compute_metrics, metrics_from_predictions
 
 logging.basicConfig(
     level=logging.INFO,
@@ -61,11 +53,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Yardımcılar
-# ---------------------------------------------------------------------------
 
 
 def get_device() -> torch.device:
@@ -87,7 +74,6 @@ def peak_gpu_memory_mb() -> float | None:
 
 
 def free_gpu_memory(*objects) -> None:
-    """Model/trainer arası bellek temizliği (T4 OOM önleme)."""
     for obj in objects:
         del obj
     if torch.cuda.is_available():
@@ -95,14 +81,12 @@ def free_gpu_memory(*objects) -> None:
 
 
 def model_size_mb(model: torch.nn.Module) -> float:
-    """Parametre + buffer boyutu (MB)."""
     nbytes = sum(p.numel() * p.element_size() for p in model.parameters())
     nbytes += sum(b.numel() * b.element_size() for b in model.buffers())
     return nbytes / (1024**2)
 
 
 def model_size_on_disk_mb(model_dir: Path) -> float:
-    """Kaydedilmiş model dosyalarının toplam boyutu (MB)."""
     if not model_dir.exists():
         return 0.0
     total = sum(f.stat().st_size for f in model_dir.rglob("*") if f.is_file())
@@ -136,7 +120,6 @@ def measure_inference_ms_per_sample(
     data_collator,
     batch_size: int = BATCH_SIZE,
 ) -> float:
-    """Test seti üzerinde ms/örnek inference süresi."""
     model.eval()
     device = next(model.parameters()).device
     loader = torch.utils.data.DataLoader(
@@ -169,11 +152,7 @@ def run_baseline(
     id2label: dict[int, str],
     label2id: dict[str, int],
 ) -> dict:
-    """
-    Fine-tuning öncesi baseline: rastgele başlatılmış sınıflandırma başlığı
-    (eğitimsiz / zero-shot öncesi referans).
-    """
-    logger.info("=== BASELINE (eğitimsiz başlık): %s ===", model_id)
+    logger.info("=== BASELINE: %s ===", model_id)
     set_seed(42)
     device = get_device()
     reset_gpu_memory_stats()
@@ -249,7 +228,6 @@ def run_finetuning(
     id2label: dict[int, str],
     label2id: dict[str, int],
 ) -> dict:
-    """Tek model + seed için fine-tuning."""
     short = model_short_name(model_id)
     logger.info("=== FINE-TUNING: %s | seed=%d ===", model_id, seed)
 
@@ -259,7 +237,6 @@ def run_finetuning(
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     tokenized = tokenize_splits(splits, tokenizer, text_col)
-    # Hatalı örnekler için ham metni sakla
     test_with_text = splits["test"]
 
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -309,11 +286,9 @@ def run_finetuning(
 
     plot_loss_curves(trainer.state.log_history, short, seed)
 
-    # Test değerlendirmesi
     test_metrics = trainer.evaluate(tokenized["test"])
     gpu_mb = peak_gpu_memory_mb()
 
-    # Model kaydet
     save_dir = MODELS_DIR / short / f"seed_{seed}"
     trainer.save_model(str(save_dir))
     tokenizer.save_pretrained(str(save_dir))
@@ -333,7 +308,6 @@ def run_finetuning(
         inference_ms,
     )
 
-    # Hatalı örnekler (ham metinli test seti ile)
     failed = collect_failed_examples_with_text(
         trainer.model,
         tokenized["test"],
@@ -377,7 +351,6 @@ def collect_failed_examples_with_text(
     phase: str,
     max_examples: int = 20,
 ) -> list[dict]:
-    """Tokenize edilmiş test + ham metin ile hatalı örnek toplama."""
     model.eval()
     device = next(model.parameters()).device
     loader = torch.utils.data.DataLoader(
@@ -424,13 +397,11 @@ def main() -> None:
     all_rows: list[dict] = []
     all_failed: list[dict] = []
 
-    # Veri bir kez yüklenir (bölme seed'i ilk SEEDS değeri ile sabit)
     splits, text_col, _label_col, id2label, label2id, num_labels = prepare_datasets(
         seed=SEEDS[0]
     )
 
     for model_id in MODELS:
-        # --- Baseline (eğitimsiz) ---
         tokenizer = AutoTokenizer.from_pretrained(model_id)
         tokenized_test_only = tokenize_splits(
             {"test": splits["test"]}, tokenizer, text_col
@@ -451,7 +422,6 @@ def main() -> None:
             tokenizer,
         )
 
-        # --- Fine-tuning: her seed ---
         seed_rows: list[dict] = []
         for seed in SEEDS:
             try:
@@ -480,7 +450,6 @@ def main() -> None:
             all_rows.append(row)
             seed_rows.append(row)
 
-        # Özet satır (ortalama ± std)
         agg = aggregate_seed_results(seed_rows)
         summary_row = {
             "model": model_id,
@@ -504,7 +473,6 @@ def main() -> None:
 
     write_results_table(all_rows)
 
-    # En az MIN_FAILED_EXAMPLES hatalı örnek
     if len(all_failed) < MIN_FAILED_EXAMPLES:
         logger.warning(
             "Toplam %d hatalı örnek; minimum için ek örnek toplanamadı.",

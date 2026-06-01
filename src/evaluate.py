@@ -1,11 +1,3 @@
-"""
-Eğitilmiş modelleri test setinde yeniden değerlendirir.
-
-Kullanım (proje kökünden):
-    python src/evaluate.py
-    python src/evaluate.py --model dbmdz/bert-base-turkish-cased --seed 42
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -22,11 +14,11 @@ SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from config import BATCH_SIZE, EVAL_RESULTS_CSV, MAX_LENGTH, MODELS, MODELS_DIR, SEEDS  # noqa: E402
-from data_utils import prepare_datasets  # noqa: E402
-from io_utils import ensure_output_dirs, model_short_name, write_results_table  # noqa: E402
-from metrics_utils import metrics_from_predictions  # noqa: E402
-from train import (  # noqa: E402
+from config import BATCH_SIZE, EVAL_RESULTS_CSV, MAX_LENGTH, MODELS, MODELS_DIR, SEEDS
+from data_utils import prepare_datasets
+from io_utils import ensure_output_dirs, model_short_name, write_results_table
+from metrics_utils import metrics_from_predictions
+from train import (
     measure_inference_ms_per_sample,
     model_size_on_disk_mb,
     peak_gpu_memory_mb,
@@ -49,7 +41,6 @@ def evaluate_saved_model(
     text_col: str,
     id2label: dict,
 ) -> dict | None:
-    """outputs/models/ altındaki kayıtlı modeli test eder."""
     short = model_short_name(model_id)
     model_dir = MODELS_DIR / short / f"seed_{seed}"
 
@@ -108,24 +99,9 @@ def evaluate_saved_model(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Kayıtlı modelleri test setinde değerlendir")
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=None,
-        help="Belirli model ID (varsayılan: config.MODELS tümü)",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Belirli seed (varsayılan: config.SEEDS tümü)",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default=str(EVAL_RESULTS_CSV),
-        help="Çıktı CSV yolu",
-    )
+    parser.add_argument("--model", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--output", type=str, default=str(EVAL_RESULTS_CSV))
     return parser.parse_args()
 
 

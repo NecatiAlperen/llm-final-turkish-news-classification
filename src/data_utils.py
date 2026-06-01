@@ -1,7 +1,3 @@
-"""
-Veri yükleme, kolon tespiti, etiket kodlama ve stratified bölme.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -19,11 +15,15 @@ from sklearn.model_selection import train_test_split
 from config import (
     CATEGORY_NAMES,
     DATASET_NAME,
+    FAST_BENCHMARK_MODE,
     INTERPRESS_CACHE_DIR,
     INTERPRESS_TEST_TSV,
     INTERPRESS_TRAIN_TSV,
     INTERPRESS_ZIP_URL,
     LABEL_COLUMN_CANDIDATES,
+    MAX_TEST_SAMPLES,
+    MAX_TRAIN_SAMPLES,
+    MAX_VAL_SAMPLES,
     TEST_RATIO,
     TEXT_COLUMN_CANDIDATES,
     TRAIN_RATIO,
@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 
 def _configure_csv_field_size_limit() -> None:
-    """Uzun haber satırları için csv alan boyutu sınırını yükseltir."""
     limit = sys.maxsize
     while limit > 0:
         try:
@@ -48,7 +47,6 @@ _configure_csv_field_size_limit()
 
 
 def detect_columns(dataset: Dataset) -> tuple[str, str]:
-    """Metin ve etiket kolonlarını otomatik belirler."""
     columns = set(dataset.column_names)
 
     text_col = next((c for c in TEXT_COLUMN_CANDIDATES if c in columns), None)
@@ -79,7 +77,6 @@ def _dataset_features() -> Features:
 
 
 def _read_interpress_tsv(tsv_path: Path) -> Dataset:
-    """Interpress TSV: news (metin) + label (0-9)."""
     _configure_csv_field_size_limit()
     contents: list[str] = []
     categories: list[int] = []
@@ -95,10 +92,6 @@ def _read_interpress_tsv(tsv_path: Path) -> Dataset:
 
 
 def load_and_merge_from_interpress_zip() -> Dataset:
-    """
-    Hugging Face script olmadan resmi ZIP/TSV kaynağından yükler.
-    datasets>=4 ortamında (Kaggle) gerekli yedek yol.
-    """
     cache_dir = INTERPRESS_CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
     zip_path = cache_dir / "interpress_news_category_tr_270k_lite.zip"
@@ -117,7 +110,6 @@ def load_and_merge_from_interpress_zip() -> Dataset:
             zf.extractall(extract_dir)
 
     if not train_tsv.exists():
-        # Bazı arşivlerde alt klasör olabilir
         found = list(extract_dir.rglob(INTERPRESS_TRAIN_TSV))
         if not found:
             raise FileNotFoundError(
@@ -137,7 +129,6 @@ def load_and_merge_from_interpress_zip() -> Dataset:
 
 
 def load_and_merge_dataset(dataset_name: str = DATASET_NAME) -> Dataset:
-    """HF dataset veya (script yoksa) Interpress ZIP/TSV; train+test birleştirir."""
     logger.info("Dataset yükleniyor: %s", dataset_name)
     try:
         raw = load_dataset(dataset_name)
@@ -160,10 +151,6 @@ def load_and_merge_dataset(dataset_name: str = DATASET_NAME) -> Dataset:
 def encode_labels(
     dataset: Dataset, label_col: str
 ) -> tuple[Dataset, dict[int, str], dict[str, int]]:
-    """
-    Etiketleri tamsayıya çevirir.
-    ClassLabel feature varsa names kullanılır.
-    """
     feature = dataset.features.get(label_col)
     if feature is not None and hasattr(feature, "names") and feature.names:
         id2label = {i: name for i, name in enumerate(feature.names)}
@@ -200,7 +187,6 @@ def stratified_split(
     label_col: str = "labels",
     seed: int = 42,
 ) -> DatasetDict:
-    """%80 train / %10 val / %10 test stratified bölme."""
     labels = np.array(dataset[label_col])
     indices = np.arange(len(dataset))
 
@@ -236,11 +222,44 @@ def stratified_split(
     return splits
 
 
+def _limit_split(dataset: Dataset, max_samples: int, seed: int) -> Dataset:
+    n = min(max_samples, len(dataset))
+    if n == len(dataset):
+        return dataset
+    return dataset.shuffle(seed=seed).select(range(n))
+
+
+def apply_fast_benchmark_limits(splits: DatasetDict, seed: int = 42) -> DatasetDict:
+    if not FAST_BENCHMARK_MODE:
+        return splits
+
+    limited = DatasetDict(
+        {
+            "train": _limit_split(splits["train"], MAX_TRAIN_SAMPLES, seed),
+            "validation": _limit_split(splits["validation"], MAX_VAL_SAMPLES, seed),
+            "test": _limit_split(splits["test"], MAX_TEST_SAMPLES, seed),
+        }
+    )
+
+    print("FAST BENCHMARK MODE AKTIF")
+    print(f"Train samples: {len(limited['train'])}")
+    print(f"Validation samples: {len(limited['validation'])}")
+    print(f"Test samples: {len(limited['test'])}")
+
+    logger.info(
+        "FAST BENCHMARK MODE: train=%d val=%d test=%d",
+        len(limited["train"]),
+        len(limited["validation"]),
+        len(limited["test"]),
+    )
+    return limited
+
+
 def prepare_datasets(seed: int = 42) -> tuple[DatasetDict, str, str, dict, dict, int]:
-    """Tam veri hazırlık pipeline'ı."""
     merged = load_and_merge_dataset()
     text_col, label_col = detect_columns(merged)
     encoded, id2label, label2id = encode_labels(merged, label_col)
     splits = stratified_split(encoded, label_col="labels", seed=seed)
+    splits = apply_fast_benchmark_limits(splits, seed=seed)
     num_labels = len(id2label)
     return splits, text_col, label_col, id2label, label2id, num_labels

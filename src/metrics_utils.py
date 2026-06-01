@@ -1,7 +1,3 @@
-"""
-Sınıflandırma metrikleri ve sonuç toplama (ortalama ± std).
-"""
-
 from __future__ import annotations
 
 import re
@@ -12,7 +8,6 @@ from sklearn.metrics import accuracy_score, f1_score
 
 
 def compute_metrics(eval_pred) -> dict[str, float]:
-    """Hugging Face Trainer compute_metrics callback."""
     logits, labels = eval_pred
     if isinstance(logits, tuple):
         logits = logits[0]
@@ -29,7 +24,6 @@ def compute_metrics(eval_pred) -> dict[str, float]:
 def metrics_from_predictions(
     labels: np.ndarray, preds: np.ndarray
 ) -> dict[str, float]:
-    """Tahmin dizilerinden metrik hesaplar."""
     return {
         "accuracy": float(accuracy_score(labels, preds)),
         "macro_f1": float(f1_score(labels, preds, average="macro", zero_division=0)),
@@ -40,7 +34,6 @@ def metrics_from_predictions(
 
 
 def format_mean_std(values: list[float]) -> str:
-    """Ortalama ± standart sapma string formatı."""
     if not values:
         return "nan ± nan"
     arr = np.array(values, dtype=float)
@@ -50,7 +43,6 @@ def format_mean_std(values: list[float]) -> str:
 
 
 def parse_mean_std(value: str) -> tuple[float | None, float | None]:
-    """'0.8500 ± 0.0123' formatını parse eder."""
     match = re.match(r"([\d.]+)\s*±\s*([\d.]+)", str(value).strip())
     if match:
         return float(match.group(1)), float(match.group(2))
@@ -61,7 +53,6 @@ def parse_mean_std(value: str) -> tuple[float | None, float | None]:
 
 
 def aggregate_seed_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aynı model için fine-tuned seed satırlarından özet üretir."""
     metric_keys = ("accuracy", "macro_f1", "weighted_f1")
     numeric_keys = (
         "train_time_s",

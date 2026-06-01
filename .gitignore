@@ -18,7 +18,7 @@ env/
 *.swp
 *.swo
 
-# Model ağırlıkları ve eğitim çıktıları (GitHub'a yüklenmez)
+# Eğitim çıktıları
 outputs/models/
 outputs/plots/
 outputs/results.csv
@@ -26,10 +26,9 @@ outputs/eval_results.csv
 outputs/failed_examples.csv
 outputs/**/checkpoints/
 
-# Interpress dataset önbelleği
 data/
 
-# Hugging Face / PyTorch cache
+# Cache
 .cache/
 huggingface/
 transformers_cache/
