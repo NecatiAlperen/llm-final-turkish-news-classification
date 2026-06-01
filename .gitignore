@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Model ağırlıkları ve eğitim çıktıları (GitHub'a yüklenmez)
+outputs/models/
+outputs/plots/
+outputs/results.csv
+outputs/eval_results.csv
+outputs/failed_examples.csv
+outputs/**/checkpoints/
+
+# Hugging Face / PyTorch cache
+.cache/
+huggingface/
+transformers_cache/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+wandb/
+runs/
